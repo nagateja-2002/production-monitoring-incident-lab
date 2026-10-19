@@ -1,0 +1,58 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: monitoring-lab-api
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks: [monitoring]
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    container_name: monitoring-lab-prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [monitoring]
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    ports: ["9093:9093"]
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    networks: [monitoring]
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: lab-admin-change-me
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+    networks: [monitoring]
+
+networks:
+  monitoring:
+
+volumes:
+  grafana-data:

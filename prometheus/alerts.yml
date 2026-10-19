@@ -1,0 +1,38 @@
+groups:
+  - name: monitoring-lab-alerts
+    rules:
+      - alert: MonitoringLabTargetDown
+        expr: up{job="monitoring-lab-api"} == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitoring lab API is unreachable"
+          description: "Prometheus has been unable to scrape the API for at least 15 seconds."
+
+      - alert: MonitoringLabHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="monitoring-lab-api",status_code=~"5.."}[1m]))
+            /
+            clamp_min(sum(rate(http_requests_total{job="monitoring-lab-api"}[1m])), 0.001)
+          ) > 0.20
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monitoring lab API has a high 5xx error rate"
+          description: "More than 20% of observed requests returned 5xx responses over the last minute."
+
+      - alert: MonitoringLabHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="monitoring-lab-api",path="/api/work"}[2m]))
+          ) > 0.8
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Monitoring lab API p95 latency is high"
+          description: "Estimated p95 latency for /api/work is above 800ms."
